@@ -396,6 +396,9 @@ def webserverProcess(webQueue, ipcQueue):
 def main():
     global shared_depthImg, shared_PWM
 
+    # TODOs:
+    print "WARNING: I2C error message is commented out. Chat should uncomment it once David fixes the IC line."
+
     # for inter-process communication
     webQueue = mp.Queue()
     ipcQueue = mp.Queue()
