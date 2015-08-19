@@ -186,7 +186,8 @@ def getFrame():
     capture.grab()
     success, rawFrame = capture.retrieve(channel = channel)
     frame640 = gain * rawFrame
-    frame16 = cv2.resize(frame640, (16, 8))
+    frame640_crop = frame640[15:475, 12:618]
+    frame16 = cv2.resize(frame640_crop, (16, 8))
     frame16 = frame16.astype(int)
     # For debugging
     # cv2.imwrite("frame640.png", frame640)
@@ -196,7 +197,7 @@ def getFrame():
 
 
 def preprocessKinectDepth(frame):
-    
+
     # For Kinect, image that is nearer than the near plane is set to 0
     # We need to set to maximum
     frame[frame == 0] = 255
@@ -210,7 +211,7 @@ def preprocessKinectDepth(frame):
 def depthToPWM(frame):
     assert maxPWM > minPWM
     assert nearDepth > farDepth
-    
+
     scaleFactor = (maxPWM - minPWM) / (nearDepth - farDepth)
     PWM16 = scaleFactor * frame # TODO: allow web to chang the mapping function
     return PWM16
@@ -271,7 +272,7 @@ def rendererProcess(webQueue, ipcQueue):
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(18, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
     sw1 = GPIO.input(18) # Input NO switch.
-    
+
     # Waits for sw1 to be pressed.
     print "System ready, press switch to continue..."
     beep(1, 0.2)
@@ -317,7 +318,7 @@ def rendererProcess(webQueue, ipcQueue):
         PWM16 = None
         if sourceMode == "web":
             PWM16 = PWMFromWeb
-        
+
         elif sourceMode == "kinect":
             frame = getFrame()
             frame = preprocessKinectDepth(frame)
@@ -325,22 +326,22 @@ def rendererProcess(webQueue, ipcQueue):
             # save a copy of PWM to share with the web server
             shared_depthImg[:] = frame[:]
 
-            # convert to PWM            
+            # convert to PWM
             PWM16 = depthToPWM(frame)
-        
+
         # set PWM
-        assert PWM16 is not None    
+        assert PWM16 is not None
         setVibrationFromPWM(PWM16)
 
         # save a copy of PWM to share with the web server
         shared_PWM[:] = PWM16[:]
-        
+
 
     print "[Renderer] shutdown requested"
     GPIO.cleanup()
     for i in range(0, 8):
         IC[i].setAllPWM(0, 0)
-    
+
     print "[Renderer] successfully shutdown"
 
 
@@ -388,7 +389,7 @@ def webserverProcess(webQueue, ipcQueue):
         if ipcCommand == "terminate":
             print "[WebServer] shutdown requested"
             return
-            
+
 
 # ============================================================================
 # Main function
@@ -402,8 +403,8 @@ def main():
     # for inter-process communication
     webQueue = mp.Queue()
     ipcQueue = mp.Queue()
-    
-    # NOTE: ctypes will complain about PEP 3118, but it's fine. 
+
+    # NOTE: ctypes will complain about PEP 3118, but it's fine.
     # (Known ctypes bug: http://stackoverflow.com/questions/4964101/pep-3118-warning-when-using-ctypes-array-as-numpy-array)
     shared_depthImg_base = mp.Array(ctypes.c_double, 8 * 16)
     shared_depthImg = np.ctypeslib.as_array(shared_depthImg_base.get_obj())
