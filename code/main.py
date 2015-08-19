@@ -78,6 +78,7 @@ def depthTest():
     for visual inspection of the range of depth values of a scene.
     The folder named "test_frames" must be created. """
 
+    # TODO: possible tuning to change the channel and gain value depending on the environment
     abc = (["a","b","c","d","e","f","g","h","i","j","k","l","m",
           "n","o","p","q","r","s","t","u","v","w","x","y","z"])
     values = 7
@@ -188,7 +189,7 @@ def getFrame():
     frame640 = gain * rawFrame
     frame640_crop = frame640[15:475, 12:618]
     frame16 = cv2.resize(frame640_crop, (16, 8))
-    frame16 = frame16.astype(int)
+    frame16 = frame16.astype(np.uint8)
     # For debugging
     # cv2.imwrite("frame640.png", frame640)
     # cv2.imwrite("frame16.png", frame16)
@@ -200,7 +201,8 @@ def preprocessKinectDepth(frame):
 
     # For Kinect, image that is nearer than the near plane is set to 0
     # We need to set to maximum
-    frame[frame == 0] = 255
+    # frame[frame == 0] = 255
+    # TODO: the zero value can come from the light outside. Thus, shouldn't be set to 255
 
     # ignore stuff that are faraway
     frame[frame < farDepth] = farDepth
@@ -213,7 +215,7 @@ def depthToPWM(frame):
     assert nearDepth > farDepth
 
     scaleFactor = (maxPWM - minPWM) / (nearDepth - farDepth)
-    PWM16 = scaleFactor * frame # TODO: allow web to chang the mapping function
+    PWM16 = scaleFactor * frame.astype(np.int16) # TODO: allow web to chang the mapping function
     return PWM16
 
 
