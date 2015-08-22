@@ -20,6 +20,7 @@ __license__ = "GPLv3"
 # Imports
 # ============================================================================
 import cv2
+import cv2.cv as cv
 import numpy as np
 import sys
 import os
@@ -268,6 +269,14 @@ def rendererProcess(webQueue, ipcQueue):
         print "Couldn't open sensor. Is it connected?"
         time.sleep(100)
     print "Sensor opened successfully"
+
+    # camera setup
+    # capture.set(cv.CV_CAP_OPENNI_DEPTH_GENERATOR + cv.CV_CAP_PROP_FRAME_WIDTH, 320) # Doesn't support by OpenCV
+    # capture.set(cv.CV_CAP_OPENNI_DEPTH_GENERATOR + cv.CV_CAP_PROP_FRAME_WIDTH, 240)  # Doesn't support by OpenCV
+    width = capture.get(cv.CV_CAP_OPENNI_DEPTH_GENERATOR + cv.CV_CAP_PROP_FRAME_WIDTH)
+    height = capture.get(cv.CV_CAP_OPENNI_DEPTH_GENERATOR + cv.CV_CAP_PROP_FRAME_WIDTH)
+    print "Depth image capture at (%d, %d)" % (width, height)
+    return
 
     # retrieve() benchmarking
     repCount = 50
