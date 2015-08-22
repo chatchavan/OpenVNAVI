@@ -24,8 +24,8 @@ import numpy as np
 import sys
 import os
 import time
-import RPi.GPIO as GPIO
-from PWM_driver import PWM
+# import RPi.GPIO as GPIO
+# from PWM_driver import PWM
 from flask import Flask, jsonify, render_template, request
 import multiprocessing as mp
 import timeit
@@ -67,6 +67,10 @@ nearDepth = 255  # TODO: determine proper min
 
 shared_depthImg = None
 shared_PWM = None
+
+capture = None
+globalRawFrame = None
+gain = 0
 
 # ============================================================================
 # Definitions
@@ -196,6 +200,17 @@ def getFrame():
     # print frame16
     return frame16
 
+def retrieve():
+    capture.grab()
+    success, rawFrame = capture.retrieve(channel = channel)
+    return rawFrame
+
+def imageProcessing():
+    frame640 = gain * globalRawFrame
+    frame640_crop = frame640[15:475, 12:618]
+    frame16 = cv2.resize(frame640_crop, (16, 8))
+    frame16 = frame16.astype(np.uint8)
+
 
 def preprocessKinectDepth(frame):
 
@@ -238,16 +253,7 @@ def setVibrationFromPWM(PWM16):
 def rendererProcess(webQueue, ipcQueue):
 
     """ Entry point for the renderer process. """
-    global isMotorOn
-
-    # Initialization of PWM drivers. PWM(0x40, debug=True) for debugging.
-    global IC
-    IC = []
-    freq = 490
-    for i in range(0,8):
-        IC.append(PWM(0x40+i))
-        IC[i].setPWMFreq(freq)
-
+    
     # Initialization of the sensor.
     global sensor
     sensor = CV_CAP_OPENNI_ASUS
@@ -263,12 +269,27 @@ def rendererProcess(webQueue, ipcQueue):
         time.sleep(100)
     print "Sensor opened successfully"
 
-    # camera benchmarking
-    # getFrame()
-    # repCount = 50
-    # print "Benchmarking camera for %d frames" % repCount
-    # callTime = timeit.timeit("getFrame()", setup="from __main__ import getFrame", number = repCount)
-    # print "getFrame() FPS: %.3f" % (repCount / callTime)
+    # retrieve() benchmarking
+    repCount = 50
+    print "Benchmarking retrieve() for %d frames" % repCount
+    callTime = timeit.timeit("retrieve()", setup="from __main__ import retrieve", number = repCount)
+    print "retrieve() FPS: %.3f" % (repCount / callTime)
+
+    # imageProcessing() benchmarking
+    global globalRawFrame
+    globalRawFrame = retrieve()
+    repCount = 50
+    print "Benchmarking imageProcessing() for %d frames" % repCount
+    callTime = timeit.timeit("imageProcessing()", setup="from __main__ import imageProcessing", number = repCount)
+    print "imageProcessing() FPS: %.3f" % (repCount / callTime)
+
+    # getFrame() benchmarking
+    repCount = 50
+    print "Benchmarking getFrame() for %d frames" % repCount
+    callTime = timeit.timeit("getFrame()", setup="from __main__ import getFrame", number = repCount)
+    print "getFrame() FPS: %.3f" % (repCount / callTime)
+
+    return
 
     # GPIO initialization.
     GPIO.setmode(GPIO.BCM)
@@ -419,21 +440,21 @@ def main():
 
     # web server process
     p_webserver = mp.Process(target=webserverProcess, args=(webQueue, ipcQueue))
-    p_webserver.start()
+    # p_webserver.start()
 
     # jacket renderer process
     p_renderer = mp.Process(target=rendererProcess, args=(webQueue, ipcQueue))
     p_renderer.start()
 
-    workers = [p_webserver, p_renderer]
-    try:
-        for worker in workers:
-            worker.join()
-    except KeyboardInterrupt:
-        print "[Main] received Ctrl + C"
-        ipcQueue.put("terminate")
-        for worker in workers:
-            worker.join()
+    # workers = [p_webserver, p_renderer]
+    # try:
+    #     for worker in workers:
+    #         worker.join()
+    # except KeyboardInterrupt:
+    #     print "[Main] received Ctrl + C"
+    #     ipcQueue.put("terminate")
+    #     for worker in workers:
+    #         worker.join()
 
 
 if __name__ == "__main__":
