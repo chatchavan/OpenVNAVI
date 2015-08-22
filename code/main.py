@@ -272,22 +272,16 @@ def rendererProcess(webQueue, ipcQueue):
     # retrieve() benchmarking
     repCount = 50
     print "Benchmarking retrieve() for %d frames" % repCount
-    callTime = timeit.timeit("retrieve()", setup="from __main__ import retrieve", number = repCount)
-    print "retrieve() FPS: %.3f" % (repCount / callTime)
-
-    # imageProcessing() benchmarking
-    global globalRawFrame
-    globalRawFrame = retrieve()
-    repCount = 50
-    print "Benchmarking imageProcessing() for %d frames" % repCount
-    callTime = timeit.timeit("imageProcessing()", setup="from __main__ import imageProcessing", number = repCount)
-    print "imageProcessing() FPS: %.3f" % (repCount / callTime)
+    timer = timeit.Timer("retrieve()", setup="from __main__ import retrieve")
+    callTime = timer.repeat(repeat=20, number = repCount)
+    print "retrieve() FPS:\n%s" % (repCount / np.array(callTime))
 
     # getFrame() benchmarking
     repCount = 50
     print "Benchmarking getFrame() for %d frames" % repCount
-    callTime = timeit.timeit("getFrame()", setup="from __main__ import getFrame", number = repCount)
-    print "getFrame() FPS: %.3f" % (repCount / callTime)
+    timer = timeit.Timer("getFrame()", setup="from __main__ import getFrame")
+    callTime = timer.repeat(repeat=20, number = repCount)
+    print "getFrame() FPS:\n%s" % (repCount / np.array(callTime))
 
     return
 
