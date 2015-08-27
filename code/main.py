@@ -248,6 +248,9 @@ def rendererProcess(webQueue, ipcQueue):
         IC.append(PWM(0x40+i))
         IC[i].setPWMFreq(freq)
 
+    IC[4] = PWM(0x40)
+    IC[6] = PWM(0x47)
+
     # Initialization of the sensor.
     global sensor
     sensor = CV_CAP_OPENNI_ASUS
