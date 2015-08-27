@@ -239,9 +239,22 @@ def rendererProcess(webQueue, ipcQueue):
 
     """ Entry point for the renderer process. """
     global isMotorOn
+    global sensor
+    global channel
+    global gain
+    global capture
+    global sourceMode
+    global IC
+
+    # mode parameters
+    sourceMode = "kinect"
+
+    # Xtion camera parameters
+    sensor = CV_CAP_OPENNI_ASUS
+    channel = 3
+    gain = 5
 
     # Initialization of PWM drivers. PWM(0x40, debug=True) for debugging.
-    global IC
     IC = []
     freq = 490
     for i in range(0,8):
@@ -252,19 +265,16 @@ def rendererProcess(webQueue, ipcQueue):
     IC[6] = PWM(0x47)
 
     # Initialization of the sensor.
-    global sensor
-    sensor = CV_CAP_OPENNI_ASUS
-    global channel
-    channel = 3
-    global gain
-    gain = 5
-    global capture
-    capture = cv2.VideoCapture(sensor)
-    capture.open(sensor)
-    while not capture.isOpened():
-        print "Couldn't open sensor. Is it connected?"
-        time.sleep(100)
-    print "Sensor opened successfully"
+    try:
+        capture = cv2.VideoCapture(sensor)
+        capture.open(sensor)
+        while not capture.isOpened():
+            print "Couldn't open sensor. Is it connected?"
+            time.sleep(100)
+        print "Sensor opened successfully"
+    except:
+        print "Cannot detect Xtion camera. Operating in web mode only."
+        sourceMode = "web"
 
     # camera benchmarking
     # getFrame()
@@ -287,10 +297,8 @@ def rendererProcess(webQueue, ipcQueue):
 
     shouldTerminate = False
 
-    global sourceMode
 
     # default transient variables
-    sourceMode = "kinect"
     PWMFromWeb = np.ones((8, 16)) * 0
 
     while not shouldTerminate:
