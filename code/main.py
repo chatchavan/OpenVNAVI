@@ -245,6 +245,7 @@ def rendererProcess(webQueue, ipcQueue):
     IC = []
     freq = 490
 
+
     IC.append(PWM(0x40+4))
     IC.append(PWM(0x40+0))
     IC.append(PWM(0x40+2))
