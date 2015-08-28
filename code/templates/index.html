@@ -21,12 +21,15 @@
 </div>
 
 <h3>PWM Input</h3>
-<div id="motorsContainer"></div>
+<table id="motorsContainer"></table>
 <button id="sendButton">Send</button>
-<input  type="button" value="Start test run" id="startTestRun"></input>
-Baseline value: <input id="testRunBaselineValue" type="text" value="0" size = "4"/>
-Delay between steps: <input id="testRunStepDelay" type="text" value="500" size = "4"/>
 
+<div>
+    Baseline value: <input id="testRunBaselineValue" type="text" value="2" size = "4"/> <br/>
+    Actuation value: <input id="testRunActuationValue" type="text" value="2000" size = "4"/> <br/>
+    Delay between steps: <input id="testRunStepDelay" type="text" value="3000" size = "4"/> <br/>
+    <input  type="button" value="Start test run" id="startTestRun"></input>
+</div>
 
 <h3>Manipulate</h3>
 <div>
@@ -38,6 +41,11 @@ Delay between steps: <input id="testRunStepDelay" type="text" value="500" size =
     Find: <input id="findInput" type="text" size = "4"/>
     Replace:  <input id="replaceInput" type="text" size = "4"/>
     <button id="replaceButton">Replace</button>
+</div>
+
+<h3>Actuation test</h3>
+<div>
+    <table id="actuationContainer"></table>
 </div>
 
 <h3>PNG input</h3>
@@ -85,8 +93,9 @@ Number of active motors:
         window.vnavi.motorInputs = [];
         window.vnavi.loadedPNG;
         window.vnavi.currentNumberOfStoredValues = 0;
-        window.vnavi.testRunStepDelayValue = 500;
-        window.vnavi.testRunBaselineValue = 0;
+        window.vnavi.testRunStepDelayValue = $("#testRunStepDelayValue").val();
+        window.vnavi.testRunBaselineValue = $("#testRunBaselineValue").val();
+        window.vnavi.testRunActuationValue = $("#testRunActuationValue").val();
         window.vnavi.getCheckedValue = function(possibleValue){
             var checkedValue = possibleValue;
             if (isNaN(checkedValue))
@@ -187,22 +196,32 @@ Number of active motors:
     var colCount = window.vnavi.colCount
 
     // create text boxes for motor input
-    var inputContainer = $('div#motorsContainer');
-    var motorInputs = [];
+    var inputContainer = $('table#motorsContainer');
+
+    // header row
+    var tableRow = $("<tr><td></td>")
+    for (var col = 0; col < colCount; col++)
+    {
+        tableRow.append($("<td>" + col + "</td>"));
+    }
+    inputContainer.append(tableRow);
 
     // expose variables to namespace
+    var motorInputs = [];
     window.vnavi.motorInputs = motorInputs;
 
     // create text input widgets
     for (var row = 0; row < rowCount; row++)
     {
+        var tableRow = $("<tr><td>" + row + "</td>")
         for (var col = 0; col < colCount; col++)
         {
-            var aMotorInput = $("<input type='text' size = '4' value='0'/>");
+            var aMotorInput = $("<input type='text' size = '5' value='0'/>");
             motorInputs.push(aMotorInput);
-            inputContainer.append(aMotorInput);
+            var aTableCell = $("<td>").append(aMotorInput)
+            tableRow.append(aTableCell);
         }
-        inputContainer.append($("<br/>"));
+        inputContainer.append(tableRow);
     }
 
     // listen to submit button event
@@ -266,7 +285,61 @@ Number of active motors:
     $("#testRunStepDelay").on('change', function(){
         window.vnavi.testRunStepDelayValue = parseInt($("#testRunStepDelay").val());
     })
+    $("#testRunActuationValue").on('change', function(){
+        window.vnavi.testRunActuationValue = parseInt($("#testRunActuationValue").val());
+        window.vnavi.setAllValues(window.vnavi.testRunActuationValue);
+    })
   });
+</script>
+
+
+<!-- actuation controller -->
+<script type="text/javascript">
+    $(function() {
+        // global parameters
+        var rowCount = window.vnavi.rowCount
+        var colCount = window.vnavi.colCount
+
+        // create text boxes for motor input
+        var inputContainer = $('table#actuationContainer');
+
+        // header row
+        var tableRow = $("<tr><td></td>")
+        for (var col = 0; col < colCount; col++)
+        {
+            tableRow.append($("<td>" + col + "</td>"));
+        }
+        inputContainer.append(tableRow);
+
+        // create text input widgets
+        var motorCheckboxes = [];
+        for (var row = 0; row < rowCount; row++)
+        {
+            var tableRow = $("<tr><td>" + row + "</td>")
+            for (var col = 0; col < colCount; col++)
+            {
+                var aMotorCheck = $("<input type='checkbox' name='actuation' value='0'/>");
+                motorCheckboxes.push(aMotorCheck);
+
+                aMotorCheck.bind('click', function() {
+                    window.vnavi.setAllValues(parseInt($("#testRunBaselineValue").val()));
+                    for (var i = 0; i < window.vnavi.motorInputs.length; i++) {
+                        var pwm = parseInt($("#testRunBaselineValue").val());
+                        if (motorCheckboxes[i].is(':checked')) {
+                            pwm = 2000;
+                        }
+                        window.vnavi.motorInputs[i].val(pwm);
+                    }
+                    window.vnavi.sendAllValues();
+                });
+
+                var aTableCell = $("<td>").append(aMotorCheck)
+                tableRow.append(aTableCell);
+            }
+            inputContainer.append(tableRow);
+        }
+    });
+
 </script>
 
 <!-- manipulate -->
