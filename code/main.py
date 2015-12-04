@@ -244,9 +244,25 @@ def rendererProcess(webQueue, ipcQueue):
     global IC
     IC = []
     freq = 490
-    for i in range(0,8):
-        IC.append(PWM(0x40+i))
-        IC[i].setPWMFreq(freq)
+
+
+    IC.append(PWM(0x40+4))
+    IC.append(PWM(0x40+0))
+    IC.append(PWM(0x40+2))
+    IC.append(PWM(0x40+3))
+    IC.append(PWM(0x40+1))
+    IC.append(PWM(0x40+5))
+    IC.append(PWM(0x40+7))
+    IC.append(PWM(0x40+6))
+
+    # for i in range(0,8):
+    #     IC.append(PWM(0x40+i))
+    #     IC[i].setPWMFreq(freq)
+
+    # IC[0] = PWM(0x44)
+    # IC[7] = PWM(0x46)
+    # IC[4] = PWM(0x40)
+    # IC[6] = PWM(0x47)
 
     # Initialization of the sensor.
     global sensor

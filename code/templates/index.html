@@ -3,6 +3,8 @@
 <title>OpenVNAVI Controller</title>
 <script type=text/javascript src="{{url_for('static', filename='jquery-1.11.3.min.js') }}"></script>
 <script type=text/javascript src="{{url_for('static', filename='png.js') }}"></script>
+<script type=text/javascript src="{{url_for('static', filename='jquery-ui.min.js') }}"></script>
+<link rel="stylesheet" href="{{url_for('static', filename='jquery-ui.min.css') }}">
 </head>
 
 <body>
@@ -19,19 +21,31 @@
 </div>
 
 <h3>PWM Input</h3>
-<div id="motorsContainer"></div>
+<table id="motorsContainer"></table>
 <button id="sendButton">Send</button>
+
+<div>
+    Baseline value: <input id="testRunBaselineValue" type="text" value="2" size = "4"/> <br/>
+    Actuation value: <input id="testRunActuationValue" type="text" value="2000" size = "4"/> <br/>
+    Delay between steps: <input id="testRunStepDelay" type="text" value="3000" size = "4"/> <br/>
+    <input  type="button" value="Start test run" id="startTestRun"></input>
+</div>
 
 <h3>Manipulate</h3>
 <div>
-    Set all: <input id="setAllInput" type="text" size = "3"/>
+    Set all: <input id="setAllInput" type="text" size = "4"/>
     <button id="setAllButton">Set</button>
 </div>
 
 <div>
-    Find: <input id="findInput" type="text" size = "3"/>
-    Replace:  <input id="replaceInput" type="text" size = "3"/>
+    Find: <input id="findInput" type="text" size = "4"/>
+    Replace:  <input id="replaceInput" type="text" size = "4"/>
     <button id="replaceButton">Replace</button>
+</div>
+
+<h3>Actuation test</h3>
+<div>
+    <table id="actuationContainer"></table>
 </div>
 
 <h3>PNG input</h3>
@@ -49,12 +63,128 @@
 <div id="depthImgContainer"></div>
 <button id="updateButton">Update</button>
 
+<h3>User Input Slider</h3>
+User ID: <input id="userID" type="text" size="5"/><br/>
+Number of active motors: 
+<input type="radio" name="sizeOfActiveArea" value="all" checked>All</td>
+<input type="radio" name="sizeOfActiveArea" value=1>1x1</td>
+<input type="radio" name="sizeOfActiveArea" value=2>2x2</td>
+<input type="radio" name="sizeOfActiveArea" value=4>4x4</td>
+<input type="radio" name="sizeOfActiveArea" value=6>6x6</td>
+<input type="radio" name="sizeOfActiveArea" value=8>8x8</td>
+
+<div id="flat-slider"></div><br/>
+<input id="sliderChange" type="text" size = "4"/>
+<input id="sliderSlide" type="text" size = "4"/>
+<input id="sliderStart" type="text" size = "4"/><br/>
+<button id="saveCurrentSliderValue">Save Current Value</button>
+<input id="numberOfStoredValues" type="text" size="3"/>
+<button id="removeLastStoredValue">Remove Last Stored Value</button></br>
+<button id="downloadAllStoredValues">Create CSV string with all values</button>
+<div id="resultArea"></div>
+
 <!-- namespace -->
 <script type=text/javascript>
     $(function() {
+        var maxValue = 3000;
         window.vnavi = {};
-        window.vnavi.rowCount = 8
-        window.vnavi.colCount = 16
+        window.vnavi.rowCount = 8;
+        window.vnavi.colCount = 16;
+        window.vnavi.motorInputs = [];
+        window.vnavi.loadedPNG;
+        window.vnavi.currentNumberOfStoredValues = 0;
+        window.vnavi.testRunStepDelayValue = $("#testRunStepDelay").val();
+        window.vnavi.testRunBaselineValue = $("#testRunBaselineValue").val();
+        window.vnavi.testRunActuationValue = $("#testRunActuationValue").val();
+        window.vnavi.getCheckedValue = function(possibleValue){
+            var checkedValue = possibleValue;
+            if (isNaN(checkedValue))
+            {
+                return 0;
+            }else{
+                return Math.min(possibleValue, maxValue);
+            };
+        }
+        window.vnavi.setAllValues = function(newValue){
+            var valueToSet = window.vnavi.getCheckedValue(newValue);
+            $.each(window.vnavi.motorInputs, function(index, motorInput) {
+                motorInput.val(valueToSet);
+            });
+        }
+        window.vnavi.setValuesForPNGSpecifiedBoxes = function(newValue){
+            var valueToSet = window.vnavi.getCheckedValue(newValue);
+            var png = window.vnavi.loadedPNG;
+            var width = 16
+            var height = 8
+
+            for (var y = 0; y < height; y++){
+                for (var x = 0; x < width; x++){
+                    var colors = png.getPixel(x, y);
+                    if (colors[0] !== 0) {
+                        window.vnavi.motorInputs[y * width + x].val(valueToSet);
+                    };
+                }
+            }
+        }
+        window.vnavi.setValuesForGivenSquare = function(squareSideLength, newValue){
+            var valueToSet = window.vnavi.getCheckedValue(newValue);
+            var halfSideLengthInt = parseInt(squareSideLength)/2;
+            var width = 16
+            var height = 8
+
+            for (var y = 0; y < height; y++){
+                for (var x = 0; x < width; x++){
+                    if ((x >= width/2-halfSideLengthInt) 
+                        && (x < width/2+halfSideLengthInt)
+                        && (y >= height/2-halfSideLengthInt)
+                        && (y < height/2+halfSideLengthInt)) {
+                        window.vnavi.motorInputs[y * width + x].val(valueToSet);
+                    }else{
+                        window.vnavi.motorInputs[y * width + x].val(0);
+                    };
+                }
+            }
+        }
+        window.vnavi.sendAllValues = function(){
+            var rowCount = window.vnavi.rowCount;
+            var colCount = window.vnavi.colCount;
+            var motorValues = [];
+            for (var row = 0; row < rowCount; row++)
+            {
+                rowValues = []
+                for (var col = 0; col < colCount; col++)
+                {
+                    var index = row * colCount + col;
+                    var motorValue = parseInt(window.vnavi.motorInputs[index].val());
+                    rowValues.push(motorValue);
+                }
+                motorValues.push(rowValues)
+            }
+
+            var modeValue = $("input[name=inputMode]:checked").val();
+
+            // data to be sent to the server
+            var data = {
+                "motors": motorValues,
+                "mode": modeValue
+            }
+
+            // sending data to server
+            var jqxhr = $.ajax({
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(data),
+                    dataType: 'json',
+                    url: $SCRIPT_ROOT + '/_send_motors'
+                })
+                .done(function(data) 
+                    {
+                        // console.log(data);
+                    }
+                );
+            // end bind()
+            return false;
+        }
     });
 </script>
 
@@ -66,68 +196,150 @@
     var colCount = window.vnavi.colCount
 
     // create text boxes for motor input
-    var inputContainer = $('div#motorsContainer');
-    var motorInputs = [];
+    var inputContainer = $('table#motorsContainer');
+
+    // header row
+    var tableRow = $("<tr><td></td>")
+    for (var col = 0; col < colCount; col++)
+    {
+        tableRow.append($("<td>" + col + "</td>"));
+    }
+    inputContainer.append(tableRow);
 
     // expose variables to namespace
+    var motorInputs = [];
     window.vnavi.motorInputs = motorInputs;
 
     // create text input widgets
     for (var row = 0; row < rowCount; row++)
     {
+        var tableRow = $("<tr><td>" + row + "</td>")
         for (var col = 0; col < colCount; col++)
         {
-            var aMotorInput = $("<input type='text' size = '3' value='0'/>");
+            var aMotorInput = $("<input type='text' size = '5' value='0'/>");
             motorInputs.push(aMotorInput);
-            inputContainer.append(aMotorInput);
+            var aTableCell = $("<td>").append(aMotorInput)
+            tableRow.append(aTableCell);
         }
-        inputContainer.append($("<br/>"));
+        inputContainer.append(tableRow);
     }
 
     // listen to submit button event
-    $('#sendButton').bind('click', function() {
-        var motorValues = [];
+    $('#sendButton').bind('click', function(){
+        window.vnavi.sendAllValues();
+    });
+
+
+    var circleThroughIndexArrayAndSetValues = function (indexArray, currentIndex){
+        //if the stop button has not been pressed, set the next value and then call new iteration
+        if ($("#startTestRun").val() === "Stop test run") {
+            window.vnavi.motorInputs[indexArray[currentIndex]].val(window.vnavi.testRunBaselineValue);
+            if (currentIndex+1 < indexArray.length) {
+                //set new value and continue
+                currentIndex++;
+                window.vnavi.motorInputs[indexArray[currentIndex]].val(2000);
+                window.vnavi.sendAllValues();
+                setTimeout(function () {
+                    circleThroughIndexArrayAndSetValues(indexArray, currentIndex);
+                }, window.vnavi.testRunStepDelayValue)
+            } else {
+                //reset the button value and stop iterating
+                $("#startTestRun").val("Start test run");
+            };
+        } else {
+            window.vnavi.motorInputs[indexArray[currentIndex]].val(window.vnavi.testRunBaselineValue);
+            window.vnavi.sendAllValues();
+        };
+    }
+    //after the test run button is pressed circle through all motors and set them to 2000 for half a second
+    $('#startTestRun').bind('click', function(){
+        var theButton = $("#startTestRun");
+        if (theButton.val() === "Start test run") {
+            theButton.val("Stop test run");
+            window.vnavi.setAllValues(window.vnavi.testRunBaselineValue);
+            //setup indexArray
+
+            var indexArray = [];
+            //normal order
+            for (var i = 0; i < window.vnavi.motorInputs.length; i++) {
+                indexArray.push(i);
+            };
+            //reverse order
+            for (var i = 0; i < window.vnavi.motorInputs.length; i++) {
+                indexArray.push(window.vnavi.motorInputs.length-1-i);
+            };
+            window.vnavi.motorInputs[indexArray[0]].val(2000);
+            window.vnavi.sendAllValues();
+            setTimeout(function () {
+                    circleThroughIndexArrayAndSetValues(indexArray, 0);
+                }, window.vnavi.testRunStepDelayValue)
+        } else {
+            theButton.val("Start test run");
+        };
+    });
+
+    $("#testRunBaselineValue").on('change', function(){
+        window.vnavi.testRunBaselineValue = parseInt($("#testRunBaselineValue").val());
+        window.vnavi.setAllValues(window.vnavi.testRunBaselineValue);
+    })
+    $("#testRunStepDelay").on('change', function(){
+        window.vnavi.testRunStepDelayValue = parseInt($("#testRunStepDelay").val());
+    })
+    $("#testRunActuationValue").on('change', function(){
+        window.vnavi.testRunActuationValue = parseInt($("#testRunActuationValue").val());
+        window.vnavi.setAllValues(window.vnavi.testRunActuationValue);
+    })
+  });
+</script>
+
+
+<!-- actuation controller -->
+<script type="text/javascript">
+    $(function() {
+        // global parameters
+        var rowCount = window.vnavi.rowCount
+        var colCount = window.vnavi.colCount
+
+        // create text boxes for motor input
+        var inputContainer = $('table#actuationContainer');
+
+        // header row
+        var tableRow = $("<tr><td></td>")
+        for (var col = 0; col < colCount; col++)
+        {
+            tableRow.append($("<td>" + col + "</td>"));
+        }
+        inputContainer.append(tableRow);
+
+        // create text input widgets
+        var motorCheckboxes = [];
         for (var row = 0; row < rowCount; row++)
         {
-            rowValues = []
+            var tableRow = $("<tr><td>" + row + "</td>")
             for (var col = 0; col < colCount; col++)
             {
-                var index = row * colCount + col;
-                var motorValue = parseInt(motorInputs[index].val());
-                rowValues.push(motorValue);
+                var aMotorCheck = $("<input type='checkbox' name='actuation' value='0'/>");
+                motorCheckboxes.push(aMotorCheck);
+
+                aMotorCheck.bind('click', function() {
+                    window.vnavi.setAllValues(parseInt($("#testRunBaselineValue").val()));
+                    for (var i = 0; i < window.vnavi.motorInputs.length; i++) {
+                        var pwm = parseInt($("#testRunBaselineValue").val());
+                        if (motorCheckboxes[i].is(':checked')) {
+                            pwm = 2000;
+                        }
+                        window.vnavi.motorInputs[i].val(pwm);
+                    }
+                    window.vnavi.sendAllValues();
+                });
+
+                var aTableCell = $("<td>").append(aMotorCheck)
+                tableRow.append(aTableCell);
             }
-            motorValues.push(rowValues)
+            inputContainer.append(tableRow);
         }
-
-        var modeValue = $("input[name=inputMode]:checked").val();
-
-        // data to be sent to the server
-        var data = {
-            "motors": motorValues,
-            "mode": modeValue
-        }
-
-        // sending data to server
-        var jqxhr = $.ajax({
-                type: 'POST',
-                contentType: 'application/json',
-                data: JSON.stringify(data),
-                dataType: 'json',
-                url: $SCRIPT_ROOT + '/_send_motors'
-            })
-            .done(function(data) 
-                {
-                    // console.log(data);
-                }
-            );
-
-    
-
-        // end bind()
-        return false;
-    
     });
-  });
+
 </script>
 
 <!-- manipulate -->
@@ -136,9 +348,10 @@
        
         $('#setAllButton').bind('click', function() {
             var inputValue = $("#setAllInput").val();
-            $.each(window.vnavi.motorInputs, function(index, motorInput) {
-                motorInput.val(inputValue);
-            });
+            //$.each(window.vnavi.motorInputs, function(index, motorInput) {
+            //    motorInput.val(inputValue);
+            //});
+            window.vnavi.setAllValues(inputValue);
 
             // end bind()
             return false;
@@ -172,6 +385,7 @@
             if (err) throw err;
             // console.log('image is <' + png.width + ',' + png.height +'>');
             // console.log(png);
+            window.vnavi.loadedPNG = png;
             drawOnCanvas(png);
         });
     };
@@ -231,11 +445,11 @@
         {
             for (var col = 0; col < colCount; col++)
             {
-                var aWidget = $("<input type='text' size = '3' value='0'/>");
+                var aWidget = $("<input type='text' size = '4' value='0'/>");
                 outPWMWidgets.push(aWidget);
                 outPWMDiv.append(aWidget);
 
-                var aWidget = $("<input type='text' size = '3' value='0'/>");
+                var aWidget = $("<input type='text' size = '4' value='0'/>");
                 depthWidgets.push(aWidget);
                 depthImgDiv.append(aWidget);
             }
@@ -260,6 +474,158 @@
 
                 });
         });
+    });
+</script>
+
+<!-- Slider input -->
+<script type=text/javascript>
+    $(function() {
+        var adjustedSliderRange = 1000;
+
+        $('input[name=sizeOfActiveArea]').bind('click', function (ev) {
+            //reset slider after new area has been selected
+            $('#flat-slider').slider('option', 'min', 0);
+            $('#flat-slider').slider('option', 'max', 3000);
+            $('#flat-slider').slider('option', 'value', 200);
+        });
+
+        $('#flat-slider').slider({
+            orientation:'horizontal',
+            range: false,
+            min: 0,
+            max: 3000,
+            value: 200
+        });
+        $('#flat-slider').on("slidechange", function(event,ui){
+            $('#sliderChange').val(ui.value);
+            var selectedActiveArea = $("input[name=sizeOfActiveArea]:checked").val();
+            //test if a png has been loaded
+            if (typeof window.vnavi.loadedPNG !== "undefined"){
+                //just update the specified values
+                window.vnavi.setValuesForPNGSpecifiedBoxes(ui.value);
+            }else if (selectedActiveArea !== "all"){
+                //update only area with the size that was selected
+                window.vnavi.setValuesForGivenSquare(selectedActiveArea, ui.value);
+            }else {
+                //update all values
+                window.vnavi.setAllValues(ui.value);
+            }
+            window.vnavi.sendAllValues();
+        });
+        $('#flat-slider').on("slide", function(event,ui){
+            $('#sliderSlide').val(ui.value);
+        });
+        $('#flat-slider').on("slidestart", function(event,ui){
+            $('#sliderStart').val(ui.value);
+        });
+
+
+        $('#saveCurrentSliderValue').bind('click', function() {
+            var currentSliderValue = $('#flat-slider').slider("value");
+            var currentUserID = $('#userID').val();
+            var selectedActiveArea = $("input[name=sizeOfActiveArea]:checked").val();
+            var currentJSONString;
+            if (localStorage.getItem('user'+currentUserID)=== null) {
+                //create new JSON object
+                var trialJSONString = '"values":[], "sum":0, "mean":0';
+                currentJSONString = '{"userID":'+currentUserID+', "trials":{"1":{'+trialJSONString+'}, "2":{'+trialJSONString+'}, "4":{'+trialJSONString+'}, "6":{'+trialJSONString+'}, "8":{'+trialJSONString+'}, "all":{'+trialJSONString+'}}}';
+            } else{
+                currentJSONString = localStorage.getItem('user'+currentUserID);
+            };
+            var currentJSONObject = JSON.parse(currentJSONString);
+            var currentTrialObject = currentJSONObject.trials[selectedActiveArea];
+            currentTrialObject.values.push(currentSliderValue);
+
+            //update sum & mean
+            var newSum = parseInt(currentTrialObject.sum) + currentSliderValue;
+            var newMean = newSum / currentTrialObject.values.length;
+            currentTrialObject.sum = newSum;
+            currentTrialObject.mean = newMean;
+
+            currentJSONString = JSON.stringify(currentJSONObject);
+            localStorage.setItem('user'+currentUserID,currentJSONString);
+            $('#numberOfStoredValues').val(currentTrialObject.values.length);
+
+            //randomize the range of the slider so that the user isn't focussing on the position of the slider
+            var newMin = Math.round(currentSliderValue - (Math.random()*(adjustedSliderRange/2)+100));
+            var newMax = Math.round(newMin + adjustedSliderRange);
+            var newStartingValue = currentSliderValue;
+            //move the starting value depending on the next task (moving until the user feels something vs. until she doesn't feel something)
+            if (currentTrialObject.values.length%2===1) {
+                //next task is moving until not feeling something
+                newStartingValue = Math.round(newStartingValue+50);
+            }else{
+                //next task is moving until feeling something
+                newStartingValue = Math.round(newStartingValue-50);
+            };
+            //set new values for the slider
+            $('#flat-slider').slider('option', 'min', newMin);
+            $('#flat-slider').slider('option', 'max', newMax);
+            $('#flat-slider').slider('option', 'value', newStartingValue);
+
+        });
+
+        $('#removeLastStoredValue').bind('click', function(){
+            var currentUserID = $('#userID').val();
+            var selectedActiveArea = parseInt($("input[name=sizeOfActiveArea]:checked").val());
+            if (localStorage.getItem('user'+currentUserID)!== null) {
+                var currentJSONString = localStorage.getItem('user'+currentUserID);
+                var currentJSONObject = JSON.parse(currentJSONString);
+                var currentTrialObject = currentJSONObject.trials[selectedActiveArea];
+
+                //update sum and mean
+                var lastElement = parseInt(currentTrialObject.values.pop());
+                var newSum = parseInt(currentTrialObject.sum) - lastElement;
+                // if remove is pressed again after nothing is in the array, the sum needs to be set to 0 to avoid a "null" entry
+                if (isNaN(newSum)) { newSum = 0};
+                var newMean = newSum / currentTrialObject.values.length;
+                currentTrialObject.sum = newSum;
+                currentTrialObject.mean = newMean;
+                
+                //currentJSONObject.values.splice(-1,1);
+                currentJSONString = JSON.stringify(currentJSONObject);
+                localStorage.setItem('user'+currentUserID,currentJSONString);
+                $('#numberOfStoredValues').val(currentTrialObject.values.length);
+            };
+        });
+
+        $("#downloadAllStoredValues").click( function() {
+            //go through all the values in the local Storage and create the output
+            for ( var i = 0, len = localStorage.length; i < len; ++i ) {
+                var currentJSONString = localStorage.getItem(localStorage.key(i));
+                var currentJSONObject = JSON.parse(currentJSONString);
+                var currentTrialsObject = currentJSONObject.trials;
+                //iterate over all trial objects in for the current user
+                for (var currentTrialIdentifier in currentTrialsObject) {
+                    if (currentTrialsObject.hasOwnProperty(currentTrialIdentifier)) {
+                        var currentTrial = currentTrialsObject[currentTrialIdentifier];
+                        var text = currentJSONObject.userID+", "+currentTrialIdentifier+", ";
+                        $.each(currentTrial.values, function(index, value){
+                            text = text + value + ", ";
+                        });
+                        text = text + currentTrial.mean + "<br/>";
+                        $("#resultArea").append(text);
+                    }
+                }
+            }
+
+            // var currentUserID = $('#userID').val();
+            // if (localStorage.getItem('user'+currentUserID)!== null) {
+            //     var currentJSONString = localStorage.getItem('user'+currentUserID);
+            //     var currentJSONObject = JSON.parse(currentJSONString);
+            //     var text = currentUserID+", ";
+            //     $.each(currentJSONObject.values, function(index, value){
+            //         text = text + value + ", ";
+            //     });
+            //     text = text + currentJSONObject.mean + "<br/>";
+            //     $("#resultArea").append(text);
+            // }
+              //var filename = "DataOfUser"+$('#userID').val();
+              //var blob = new Blob([text], {type: "text/plain;charset=utf-8"});
+              //saveAs(blob, filename+".txt");
+        });
+
+
     });
 </script>
 
