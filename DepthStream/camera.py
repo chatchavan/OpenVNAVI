@@ -34,11 +34,16 @@ class VideoCamera(object):
         success, rawFrame = self.capture.retrieve(channel = CV_CAP_OPENNI_DEPTH_MAP)
 
         # convert depth to RGB with proper masking of the invalid pixels
-        outFrame = np.zeros((480, 640, 3), np.uint8)
         rawFrameBGR = np.dstack((rawFrame, rawFrame, rawFrame)) # expand raw data to BGR dimension
-        outFrame[rawFrame == 0] = (0, 0, 255)  # mask invalid pixels (too close or no IR feedback) with red
         rawFrameBGRScaled = (rawFrameBGR - 800) * 255 / (3500 - 800)  # scale the to gray scale according to the valid depth range
-        outFrame[rawFrameBGR != 0] = rawFrameBGRScaled[rawFrameBGR != 0]
+        outFrame = np.zeros((480, 640, 3), np.uint8)
+        outFrame[:] = rawFrameBGRScaled[:]
+        outFrame[rawFrame == 0] = (0, 0, 255)    # mask invalid pixels (too close or no IR feedback) with red
 
+        # encode for web streaming
         ret, jpeg = cv2.imencode('.jpg', outFrame)
         return jpeg.tostring()
+
+    def shutdown(self):
+        self.capture.release()
+        
