@@ -24,9 +24,12 @@ while not capture.isOpened():
 # capture
 dontcare = capture.grab()
 success, rawFrame = capture.retrieve(channel = CV_CAP_OPENNI_DEPTH_MAP)
+np.save("rawFrame.npy", rawFrame) 	# save as numpy array
 
-# save single frame
-cv2.imwrite("rawFrame.png", rawFrame)
+cv2.imwrite("rawFrame.png", rawFrame)  # save PNG single frame
+
+
+
 
 
 
@@ -41,6 +44,8 @@ outFrame[rawFrame == 0] = (0, 0, 255)    # mask invalid pixels (too close or no 
 cv2.imwrite("outFrame.png", outFrame)
 
 
+# read numpy array
+rawFrame = np.load("rawFrame.npy")
 
 
 
