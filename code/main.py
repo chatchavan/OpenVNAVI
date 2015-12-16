@@ -246,14 +246,14 @@ def rendererProcess(webQueue, ipcQueue):
     freq = 490
 
 
-    IC.append(PWM(0x40+4))
-    IC.append(PWM(0x40+0))
-    IC.append(PWM(0x40+2))
-    IC.append(PWM(0x40+3))
-    IC.append(PWM(0x40+1))
-    IC.append(PWM(0x40+5))
-    IC.append(PWM(0x40+7))
-    IC.append(PWM(0x40+6))
+    # IC.append(PWM(0x40+4))
+    # IC.append(PWM(0x40+0))
+    # IC.append(PWM(0x40+2))
+    # IC.append(PWM(0x40+3))
+    # IC.append(PWM(0x40+1))
+    # IC.append(PWM(0x40+5))
+    # IC.append(PWM(0x40+7))
+    # IC.append(PWM(0x40+6))
 
     # for i in range(0,8):
     #     IC.append(PWM(0x40+i))
@@ -272,6 +272,7 @@ def rendererProcess(webQueue, ipcQueue):
     global gain
     gain = 5
     global capture
+    print "About to initialize camera..."
     capture = cv2.VideoCapture(sensor)
     capture.open(sensor)
     while not capture.isOpened():
@@ -287,15 +288,15 @@ def rendererProcess(webQueue, ipcQueue):
     # print "getFrame() FPS: %.3f" % (repCount / callTime)
 
     # GPIO initialization.
-    GPIO.setmode(GPIO.BCM)
-    GPIO.setup(18, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-    sw1 = GPIO.input(18) # Input NO switch.
+    # GPIO.setmode(GPIO.BCM)
+    # GPIO.setup(18, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+    # sw1 = GPIO.input(18) # Input NO switch.
 
     # Waits for sw1 to be pressed.
-    print "System ready, press switch to continue..."
-    beep(1, 0.2)
-    GPIO.wait_for_edge(18, GPIO.RISING)
-    fadeIn()
+    # print "System ready, press switch to continue..."
+    # beep(1, 0.2)
+    # GPIO.wait_for_edge(18, GPIO.RISING)
+    # fadeIn()
     isMotorOn = True
 
     shouldTerminate = False
@@ -309,9 +310,9 @@ def rendererProcess(webQueue, ipcQueue):
     while not shouldTerminate:
 
         # check hardware switch
-        gpioValue = GPIO.input(18)
-        if ((gpioValue == True) and (isMotorOn == True)):
-            pause()
+        # gpioValue = GPIO.input(18)
+        # if ((gpioValue == True) and (isMotorOn == True)):
+        #     pause()
 
         # process web server message
         if not webQueue.empty():
@@ -349,16 +350,16 @@ def rendererProcess(webQueue, ipcQueue):
 
         # set PWM
         assert PWM16 is not None
-        setVibrationFromPWM(PWM16)
+        # setVibrationFromPWM(PWM16)
 
         # save a copy of PWM to share with the web server
         shared_PWM[:] = PWM16[:]
 
 
     print "[Renderer] shutdown requested"
-    GPIO.cleanup()
-    for i in range(0, 8):
-        IC[i].setAllPWM(0, 0)
+    # GPIO.cleanup()
+    # for i in range(0, 8):
+    #     IC[i].setAllPWM(0, 0)
 
     print "[Renderer] successfully shutdown"
 
