@@ -26,7 +26,7 @@ import os
 import time
 import RPi.GPIO as GPIO
 from PWM_driver import PWM
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, Response
 import multiprocessing as mp
 import timeit
 import ctypes
@@ -65,8 +65,9 @@ minPWM = 20  # TODO: determine proper min
 farDepth = 0  # TODO: determine proper max
 nearDepth = 255  # TODO: determine proper min
 
-shared_depthImg = None
+shared_depthImg16 = None
 shared_PWM = None
+shared_depthImgFull = None
 
 # ============================================================================
 # Definitions
@@ -186,6 +187,11 @@ def getFrame():
 
     capture.grab()
     success, rawFrame = capture.retrieve(channel = channel)
+    
+    # save raw frame for sharing
+    global shared_depthImgFull
+    shared_depthImgFull[:] = rawFrame[:]
+
     frame640 = gain * rawFrame
     frame640_crop = frame640[15:475, 12:618]
     frame16 = cv2.resize(frame640_crop, (16, 8))
@@ -343,7 +349,8 @@ def rendererProcess(webQueue, ipcQueue):
             frame = preprocessKinectDepth(frame)
 
             # save a copy of PWM to share with the web server
-            shared_depthImg[:] = frame[:]
+            global shared_depthImg16
+            shared_depthImg16[:] = frame[:]
 
             # convert to PWM
             PWM16 = depthToPWM(frame)
@@ -360,7 +367,7 @@ def rendererProcess(webQueue, ipcQueue):
     # GPIO.cleanup()
     # for i in range(0, 8):
     #     IC[i].setAllPWM(0, 0)
-
+    capture.release()   # cleanup camera
     print "[Renderer] successfully shutdown"
 
 
@@ -391,8 +398,37 @@ def send_motors():
 
 @webServer.route('/_get_render_data')
 def get_render_data():
-    retVal = {"PWM": shared_PWM.tolist(), "depth": shared_depthImg.tolist()}
+    retVal = {"PWM": shared_PWM.tolist(), "depth": shared_depthImg16.tolist()}
     return jsonify(**retVal)
+
+@webServer.route('/video')
+def index():
+    return render_template('video.html')
+
+def generateImage():
+    while True: # TODO: find a way to stop sending response when client closes the video feed window
+        rawFrame = shared_depthImgFull
+
+        # convert depth to RGB with proper masking of the invalid pixels
+        rawFrameBGR = np.dstack((rawFrame, rawFrame, rawFrame)) # expand raw data to BGR dimension
+        rawFrameBGRScaled = (rawFrameBGR - 800) * 255 / (3500 - 800)  # scale the to gray scale according to the valid depth range
+        outFrame = np.zeros((480, 640, 3), np.uint8)
+        outFrame[:] = rawFrameBGRScaled[:]
+        outFrame[rawFrame == 0] = (0, 0, 255)    # mask invalid pixels (too close or no IR feedback) with red
+
+        # encode for web streaming
+        ret, jpeg = cv2.imencode('.jpg', outFrame)
+        frame = jpeg.tostring()
+
+        # add content header
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n\r\n')
+
+@webServer.route('/video_feed')
+def video_feed():
+    return Response(generateImage(),
+                    mimetype='multipart/x-mixed-replace; boundary=frame')
+
 
 def webserverProcess(webQueue, ipcQueue):
 
@@ -414,7 +450,7 @@ def webserverProcess(webQueue, ipcQueue):
 # Main function
 # ============================================================================
 def main():
-    global shared_depthImg, shared_PWM
+    global shared_depthImg16, shared_PWM, shared_depthImgFull
 
     # TODOs:
     print "WARNING: I2C error message is commented out. Chat should uncomment it once David fixes the IC line."
@@ -425,9 +461,14 @@ def main():
 
     # NOTE: ctypes will complain about PEP 3118, but it's fine.
     # (Known ctypes bug: http://stackoverflow.com/questions/4964101/pep-3118-warning-when-using-ctypes-array-as-numpy-array)
-    shared_depthImg_base = mp.Array(ctypes.c_double, 8 * 16)
-    shared_depthImg = np.ctypeslib.as_array(shared_depthImg_base.get_obj())
-    shared_depthImg = shared_depthImg.reshape(8, 16)
+    shared_depthImg16_base = mp.Array(ctypes.c_double, 8 * 16)
+    shared_depthImg16 = np.ctypeslib.as_array(shared_depthImg16_base.get_obj())
+    shared_depthImg16 = shared_depthImg16.reshape(8, 16)
+
+    shared_depthImgFull_base = mp.Array(ctypes.c_double, 480 * 640)
+    shared_depthImgFull = np.ctypeslib.as_array(shared_depthImgFull_base.get_obj())
+    shared_depthImgFull = shared_depthImgFull.reshape(480, 640)
+    
 
     shared_PWM_base = mp.Array(ctypes.c_double, 8 * 16)
     shared_PWM = np.ctypeslib.as_array(shared_PWM_base.get_obj())
