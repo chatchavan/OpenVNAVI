@@ -413,11 +413,16 @@ def get_render_data():
     return jsonify(**retVal)
 
 @webServer.route('/video')
-def index():
+def video():
     return render_template('video.html')
 
-def generateImage():
-    while True: # TODO: find a way to stop sending response when client closes the video feed window
+@webServer.route('/video16')
+def video16():
+    return render_template('video16.html')
+
+
+def generateDepthImage():
+    while True:
         rawFrame = shared_depthImgFull
 
         # convert depth to RGB with proper masking of the invalid pixels
@@ -438,10 +443,32 @@ def generateImage():
         # sleep to work on different thing
         gevent.sleep(0)
 
-@webServer.route('/video_feed')
-def video_feed():
-    return Response(generateImage(),
+def generateDepth16Image():
+    while True:
+        depth16Frame = shared_depthImg16
+
+        # encode for web streaming
+        ret, jpeg = cv2.imencode('.jpg', depth16Frame)
+        frame = jpeg.tostring()
+
+        # add content header
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n\r\n')
+
+        # sleep to work on different thing
+        gevent.sleep(0)
+
+
+@webServer.route('/feed_depth')
+def feed_depth():
+    return Response(generateDepthImage(),
                     mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@webServer.route('/feed_depth16')
+def feed_depth16():
+    return Response(generateDepth16Image(),
+                    mimetype='multipart/x-mixed-replace; boundary=frame')
+
 
 
 def webserverProcess(webQueue, ipcQueue):
