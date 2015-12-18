@@ -190,12 +190,13 @@ def getFrame():
     
     # save raw frame for sharing
     global shared_depthImgFull
-    shared_depthImgFull[:] = rawFrame[:]
 
+    shared_depthImgFull[:] = rawFrame
     frame640 = gain * rawFrame
     frame640_crop = frame640[15:475, 12:618]
     frame16 = cv2.resize(frame640_crop, (16, 8))
     frame16 = frame16.astype(np.uint8)
+
     # For debugging
     # cv2.imwrite("frame640.png", frame640)
     # cv2.imwrite("frame16.png", frame16)
@@ -274,7 +275,7 @@ def rendererProcess(webQueue, ipcQueue):
     global sensor
     sensor = CV_CAP_OPENNI_ASUS
     global channel
-    channel = 3
+    channel = CV_CAP_OPENNI_DEPTH_MAP
     global gain
     gain = 5
     global capture
@@ -412,8 +413,8 @@ def generateImage():
         # convert depth to RGB with proper masking of the invalid pixels
         rawFrameBGR = np.dstack((rawFrame, rawFrame, rawFrame)) # expand raw data to BGR dimension
         rawFrameBGRScaled = (rawFrameBGR - 800) * 255 / (3500 - 800)  # scale the to gray scale according to the valid depth range
-        outFrame = np.zeros((480, 640, 3), np.uint8)
-        outFrame[:] = rawFrameBGRScaled[:]
+        outFrame = np.zeros((480, 640, 3), np.float64)
+        outFrame[:] = rawFrameBGRScaled
         outFrame[rawFrame == 0] = (0, 0, 255)    # mask invalid pixels (too close or no IR feedback) with red
 
         # encode for web streaming
