@@ -24,6 +24,20 @@ while not capture.isOpened():
 # capture
 dontcare = capture.grab()
 success, rawFrame = capture.retrieve(channel = CV_CAP_OPENNI_DEPTH_MAP)
+frame640 = rawFrame
+frame640_crop = frame640[15:475, 12:618]
+frame = cv2.resize(frame640_crop, (16, 8))
+
+# filter distance
+minDist = 800 # in mm
+maxDist = 3500 # in mm
+frame[frame > maxDist] = 0
+frame[frame < minDist] = 0
+validIdx = (frame > 800) & (frame < 3500)
+frame[validIdx] = (frame[validIdx] - 800) * 255 / (3500 - 800)
+
+
+
 np.save("rawFrame.npy", rawFrame) 	# save as numpy array
 
 cv2.imwrite("rawFrame.png", rawFrame)  # save PNG single frame
