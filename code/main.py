@@ -221,7 +221,7 @@ def preprocessKinectDepth(frame):
     frame[frame < minDist] = 0
 
     validIdx = (frame > 800) & (frame < 3500)
-    frame[validIdx] = (frame[validIdx] - 800) * 255 / (3500 - 800)
+    frame[validIdx] = (frame[validIdx] - 800) / (3500 - 800) * 255
     
     frame = frame * 10  # arbitrary gain to allow easier visualization
     return frame
