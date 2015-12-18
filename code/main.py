@@ -19,6 +19,9 @@ __license__ = "GPLv3"
 # ============================================================================
 # Imports
 # ============================================================================
+from gevent import monkey
+monkey.patch_all()
+
 import cv2
 import numpy as np
 import sys
@@ -30,6 +33,9 @@ from flask import Flask, jsonify, render_template, request, Response
 import multiprocessing as mp
 import timeit
 import ctypes
+import gevent
+from gevent.wsgi import WSGIServer
+
 
 # ============================================================================
 # Constants
@@ -428,6 +434,9 @@ def generateImage():
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n\r\n')
 
+        # sleep to work on different thing
+        gevent.sleep(0)
+
 @webServer.route('/video_feed')
 def video_feed():
     return Response(generateImage(),
@@ -441,7 +450,8 @@ def webserverProcess(webQueue, ipcQueue):
         webServer.extensions = {}
     webServer.extensions['queue'] = webQueue
 
-    webServer.run(host='0.0.0.0', use_reloader=False)
+    http_server = WSGIServer(('0.0.0.0', 5000), webServer)
+    http_server.serve_forever()
 
     while True:
         ipcCommand = ipcQueue.get()
