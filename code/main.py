@@ -69,6 +69,9 @@ shared_depthImg16 = None
 shared_PWM = None
 shared_depthImgFull = None
 
+STREAM_WIDTH = 640 / 4
+STREAM_HEIGHT = 480 / 4
+
 # ============================================================================
 # Definitions
 # ============================================================================
@@ -190,8 +193,9 @@ def getFrame():
     
     # save raw frame for sharing
     global shared_depthImgFull
+    rawFrameHalf = cv2.resize(rawFrame, (STREAM_WIDTH, STREAM_HEIGHT))
+    shared_depthImgFull[:] = rawFrameHalf
 
-    shared_depthImgFull[:] = rawFrame
     frame640 = gain * rawFrame
     frame640_crop = frame640[15:475, 12:618]
     frame16 = cv2.resize(frame640_crop, (16, 8))
@@ -412,7 +416,7 @@ def generateImage():
         # convert depth to RGB with proper masking of the invalid pixels
         rawFrameBGR = np.dstack((rawFrame, rawFrame, rawFrame)) # expand raw data to BGR dimension
         rawFrameBGRScaled = (rawFrameBGR - 800) * 255 / (3500 - 800)  # scale the to gray scale according to the valid depth range
-        outFrame = np.zeros((480, 640, 3), np.float64)
+        outFrame = np.zeros((STREAM_HEIGHT, STREAM_WIDTH, 3), np.float64)
         outFrame[:] = rawFrameBGRScaled
         outFrame[rawFrame == 0] = (0, 0, 255)    # mask invalid pixels (too close or no IR feedback) with red
 
@@ -465,9 +469,9 @@ def main():
     shared_depthImg16 = np.ctypeslib.as_array(shared_depthImg16_base.get_obj())
     shared_depthImg16 = shared_depthImg16.reshape(8, 16)
 
-    shared_depthImgFull_base = mp.Array(ctypes.c_double, 480 * 640)
+    shared_depthImgFull_base = mp.Array(ctypes.c_double, STREAM_HEIGHT * STREAM_WIDTH)
     shared_depthImgFull = np.ctypeslib.as_array(shared_depthImgFull_base.get_obj())
-    shared_depthImgFull = shared_depthImgFull.reshape(480, 640)
+    shared_depthImgFull = shared_depthImgFull.reshape(STREAM_HEIGHT, STREAM_WIDTH)
     
 
     shared_PWM_base = mp.Array(ctypes.c_double, 8 * 16)
