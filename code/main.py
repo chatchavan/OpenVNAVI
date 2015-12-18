@@ -202,10 +202,9 @@ def getFrame():
     rawFrameHalf = cv2.resize(rawFrame, (STREAM_WIDTH, STREAM_HEIGHT))
     shared_depthImgFull[:] = rawFrameHalf
 
-    frame640 = gain * rawFrame
+    frame640 = rawFrame
     frame640_crop = frame640[15:475, 12:618]
     frame16 = cv2.resize(frame640_crop, (16, 8))
-    frame16 = frame16.astype(np.uint8)
 
     # For debugging
     # cv2.imwrite("frame640.png", frame640)
@@ -215,15 +214,16 @@ def getFrame():
 
 
 def preprocessKinectDepth(frame):
+    # scale to the distance that we are interested
+    minDist = 800 # in mm
+    maxDist = 3500 # in mm
+    frame[frame > maxDist] = 0
+    frame[frame < minDist] = 0
 
-    # For Kinect, image that is nearer than the near plane is set to 0
-    # We need to set to maximum
-    # frame[frame == 0] = 255
-    # TODO: the zero value can come from the light outside. Thus, shouldn't be set to 255
-
-    # ignore stuff that are faraway
-    frame[frame < farDepth] = farDepth
-
+    validIdx = (frame > 800) & (frame < 3500)
+    frame[validIdx] = (frame[validIdx] - 800) * 255 / (3500 - 800)
+    
+    frame = frame * 10  # arbitrary gain to allow easier visualization
     return frame
 
 
