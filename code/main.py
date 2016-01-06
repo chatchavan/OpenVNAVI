@@ -68,8 +68,6 @@ sourceMode = "kinect"  # Data source "kinect" or "web"
 
 maxPWM = 3000  # TODO: determine proper max
 minPWM = 20  # TODO: determine proper min
-farDepth = 0  # TODO: determine proper max
-nearDepth = 255  # TODO: determine proper min
 
 shared_depthImg16 = None
 shared_PWM = None
@@ -197,39 +195,43 @@ def getFrame():
     capture.grab()
     success, rawFrame = capture.retrieve(channel = channel)
     
-    # save raw frame for sharing
-    global shared_depthImgFull
-    rawFrameHalf = cv2.resize(rawFrame, (STREAM_WIDTH, STREAM_HEIGHT))
-    shared_depthImgFull[:] = rawFrameHalf
-
-    frame640 = rawFrame
-    frame640_crop = frame640[15:475, 12:618]
-    frame16 = cv2.resize(frame640_crop, (16, 8))
-
-    # For debugging
-    # cv2.imwrite("frame640.png", frame640)
-    # cv2.imwrite("frame16.png", frame16)
-    # print frame16
-    return frame16
+    return rawFrame
 
 
-def preprocessKinectDepth(frame):
+def processDepth(inFrame):
+    # convert to appropriate data type for computation
+    frame = inFrame.astype(float)
+    
+    # crop to match actuator aspect ratio
+    frame = frame[15:475, 12:618]  # TODO: this aspect ratio doesn't match the vest
+    
     # scale to the distance that we are interested
     minDist = 800 # in mm
-    maxDist = 3500 # in mm
+    maxDist = 2000 # in mm
     frame[frame > maxDist] = 0
     frame[frame < minDist] = 0
 
+    # scale valid pixels
     validIdx = (frame > 800) & (frame < 3500)
     frame[validIdx] = (frame[validIdx] - 800) / (3500 - 800) * 255
     
-    frame = frame * 10  # arbitrary gain to allow easier visualization
+    # reverse the mapping (0: farthest - 255: nearest)
+    frame[validIdx] = 255 - frame[validIdx]
+    
     return frame
+
+
+def scaleFrame(inFrame):
+    frame16 = cv2.resize(inFrame, (16,8))
+    return frame16
 
 
 def depthToPWM(frame):
     assert maxPWM > minPWM
-    assert nearDepth > farDepth
+    
+    # NOTE: Assume that the image processing part already cut to the proper near and far planes
+    farDepth = 0
+    nearDepth = 255
 
     scaleFactor = (maxPWM - minPWM) / (nearDepth - farDepth)
     PWM16 = scaleFactor * frame.astype(np.int16) # TODO: allow web to chang the mapping function
@@ -246,6 +248,10 @@ def setVibrationFromPWM(PWM16):
         for col in range (0,16):
             IC[row].setPWM(col,0,(PWM16[row,col]))
 
+def snapShotForWeb(frame):
+    global shared_depthImgFull
+    frameSmall = cv2.resize(frame, (STREAM_WIDTH, STREAM_HEIGHT))
+    shared_depthImgFull[:] = frameSmall
 
 
 # ============================================================================
@@ -357,7 +363,9 @@ def rendererProcess(webQueue, ipcQueue):
 
         elif sourceMode == "kinect":
             frame = getFrame()
-            frame = preprocessKinectDepth(frame)
+            snapShotForWeb(frame)
+            frame = processDepth(frame)
+            frame = scaleFrame(frame)
 
             # save a copy of PWM to share with the web server
             global shared_depthImg16
@@ -426,8 +434,8 @@ def generateDepthImage():
         rawFrame = shared_depthImgFull
 
         # convert depth to RGB with proper masking of the invalid pixels
-        rawFrameBGR = np.dstack((rawFrame, rawFrame, rawFrame)) # expand raw data to BGR dimension
-        rawFrameBGRScaled = (rawFrameBGR - 800) * 255 / (3500 - 800)  # scale the to gray scale according to the valid depth range
+        rawFrameBGR = np.dstack((rawFrame, rawFrame, rawFrame)).astype(np.float64) # expand raw data to BGR dimension
+        rawFrameBGRScaled = (rawFrameBGR - 800) / (3500 - 800) * 255  # scale the to gray scale according to the valid depth range
         outFrame = np.zeros((STREAM_HEIGHT, STREAM_WIDTH, 3), np.float64)
         outFrame[:] = rawFrameBGRScaled
         outFrame[rawFrame == 0] = (0, 0, 255)    # mask invalid pixels (too close or no IR feedback) with red
@@ -469,7 +477,10 @@ def feed_depth16():
     return Response(generateDepth16Image(),
                     mimetype='multipart/x-mixed-replace; boundary=frame')
 
-
+@webServer.route('/shutdown')
+def shutdown():
+    webServer.extensions['cmdQueue'].put("terminate")
+    return "Shutting down..."
 
 def webserverProcess(webQueue, ipcQueue):
 
@@ -477,6 +488,7 @@ def webserverProcess(webQueue, ipcQueue):
     if not hasattr(webServer, 'extensions'):
         webServer.extensions = {}
     webServer.extensions['queue'] = webQueue
+    webServer.extensions['cmdQueue'] = ipcQueue
 
     http_server = WSGIServer(('0.0.0.0', 5000), webServer)
     http_server.serve_forever()
