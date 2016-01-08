@@ -434,16 +434,15 @@ def video16():
 def generateDepthImage():
     while True:
         rawFrame = shared_depthImgFull
+        invalidIdx = (rawFrame == 0)
 
         # convert depth to RGB with proper masking of the invalid pixels
-        rawFrameBGR = np.dstack((rawFrame, rawFrame, rawFrame)).astype(np.float64) # expand raw data to BGR dimension
-        rawFrameBGRScaled = (rawFrameBGR - 800) / (3500 - 800) * 255  # scale the to gray scale according to the valid depth range
-        outFrame = np.zeros((STREAM_HEIGHT, STREAM_WIDTH, 3), np.float64)
-        outFrame[:] = rawFrameBGRScaled
-        outFrame[rawFrame == 0] = (0, 0, 255)    # mask invalid pixels (too close or no IR feedback) with red
-
+        rawFrame = (rawFrame - 800) / (3500 - 800) * 255  # scale the to gray scale according to the valid depth range
+        rawFrameBGR = np.dstack((rawFrame, rawFrame, rawFrame)).view(dtype = np.float64) # expand raw data to BGR dimension
+        rawFrameBGR[invalidIdx] = (0, 0, 255)     # mask invalid pixels (too close or no IR feedback) with red
+        
         # encode for web streaming
-        ret, jpeg = cv2.imencode('.jpg', outFrame)
+        ret, jpeg = cv2.imencode('.jpg', rawFrameBGR)
         frame = jpeg.tostring()
 
         # add content header
