@@ -386,7 +386,6 @@ def rendererProcess(webQueue, ipcQueue):
     GPIO.cleanup()
     for i in range(0, 8):
         IC[i].setAllPWM(0, 0)
-    capture.release()   # cleanup camera
     print "[Renderer] successfully shutdown"
 
 
