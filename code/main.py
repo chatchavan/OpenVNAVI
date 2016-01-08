@@ -77,6 +77,15 @@ STREAM_WIDTH = 640 / 4
 STREAM_HEIGHT = 480 / 4
 
 # ============================================================================
+# Enums
+# ============================================================================
+
+# possible application states
+APPSTATE_SHUTDOWN = 0
+APPSTATE_RUNNING = 1
+
+
+# ============================================================================
 # Definitions
 # ============================================================================
 def depthTest():
@@ -325,15 +334,14 @@ def rendererProcess(webQueue, ipcQueue):
     # fadeIn()
     isMotorOn = True
 
-    shouldTerminate = False
-
     global sourceMode
+    global shared_appState
 
     # default transient variables
     sourceMode = "kinect"
     PWMFromWeb = np.ones((8, 16)) * 0
 
-    while not shouldTerminate:
+    while True:
 
         # check hardware switch
         # gpioValue = GPIO.input(18)
@@ -353,11 +361,6 @@ def rendererProcess(webQueue, ipcQueue):
                     print "Switching to mode %s" % nextMode
                     sourceMode = nextMode
 
-        # process inter-process message
-        if not ipcQueue.empty():
-            ipcCommand = ipcQueue.get()
-            if ipcCommand == "terminate":
-                shouldTerminate = True
 
         # prepare PWM
         PWM16 = None
@@ -381,6 +384,10 @@ def rendererProcess(webQueue, ipcQueue):
         # save a copy of PWM to share with the web server
         shared_PWM[:] = PWM16[:]
 
+        # watch for termination signal
+        if shared_appState.value != APPSTATE_RUNNING:
+            break
+
 
     print "[Renderer] shutdown requested"
     # GPIO.cleanup()
@@ -400,29 +407,26 @@ def cameraProcess(webQueue, ipcQueue):
     channel = CV_CAP_OPENNI_DEPTH_MAP
     
     # inialize camera
-    print "About to initialize camera..."
+    print "[Camera] Initializing camera..."
     capture = cv2.VideoCapture(sensor)
     capture.open(sensor)
     while not capture.isOpened():
-        print "Couldn't open sensor. Is it connected? (Trying again in 5 sec)"
+        print "[Camera] Couldn't open the camera. Is it connected? (Trying again in 5 sec)"
         time.sleep(5)
         capture = cv2.VideoCapture(sensor)
         capture.open(sensor)
-    print "Sensor opened successfully"
+    print "[Camera] Camera opened successfully"
 
     # get frame and copy to the shared buffer
-    shouldTerminate = False
-    while not shouldTerminate:
+    global shared_appState
+    while True:
         rawFrame = getFrame()
         shared_rawFrame[:] = rawFrame[:]
         
-        # process inter-process message
-        # TODO: change to shared ctype value
-        if not ipcQueue.empty():
-            ipcCommand = ipcQueue.get()
-            if ipcCommand == "terminate":
-                shouldTerminate = True
-
+        # watch for termination signal
+        if shared_appState.value != APPSTATE_RUNNING:
+            break
+        
 
     print "[Camera] shutdown requested"
     capture.release()
@@ -517,8 +521,12 @@ def feed_depth16():
 
 @webServer.route('/shutdown')
 def shutdown():
-    webServer.extensions['cmdQueue'].put("terminate")
-    return "Shutting down..."
+    global shared_appState
+    shared_appState.value = APPSTATE_SHUTDOWN
+    print "[Web server] shutdown requested"
+    http_server.stop()
+    print "[Web server] successfully shutdown"
+    return "Shutdown requested"
 
 def webserverProcess(webQueue, ipcQueue):
 
@@ -528,14 +536,9 @@ def webserverProcess(webQueue, ipcQueue):
     webServer.extensions['queue'] = webQueue
     webServer.extensions['cmdQueue'] = ipcQueue
 
+    global http_server
     http_server = WSGIServer(('0.0.0.0', 5000), webServer)
     http_server.serve_forever()
-
-    while True:
-        ipcCommand = ipcQueue.get()
-        if ipcCommand == "terminate":
-            print "[WebServer] shutdown requested"
-            return
 
 
 # ============================================================================
@@ -570,6 +573,11 @@ def main():
     shared_PWM = shared_PWM.reshape(8, 16)
 
 
+    # termination flag
+    global shared_appState
+    shared_appState =  mp.Value(ctypes.c_int)
+    shared_appState.value = APPSTATE_RUNNING
+
     # web server process
     p_webserver = mp.Process(target=webserverProcess, args=(webQueue, ipcQueue))
     p_webserver.start()
@@ -582,16 +590,29 @@ def main():
     p_renderer = mp.Process(target=rendererProcess, args=(webQueue, ipcQueue))
     p_renderer.start()
 
-    workers = [p_webserver, p_renderer, p_camera]
-    try:
-        for worker in workers:
-            worker.join()
-    except KeyboardInterrupt:
-        print "[Main] received Ctrl + C"
-        ipcQueue.put("terminate")
-        for worker in workers:
-            worker.join()
-
 
 if __name__ == "__main__":
     main()
+
+
+
+
+#================= Benchamarking code
+
+    # camera benchmarking
+    # getFrame()
+    # repCount = 50
+    # print "Benchmarking camera for %d frames" % repCount
+    # callTime = timeit.timeit("getFrame()", setup="from __main__ import getFrame", number = repCount)
+    # print "getFrame() FPS: %.3f" % (repCount / callTime)
+    # capture.release()
+    # return
+
+    # image processing benchmarking
+    # getFrame()
+    # repCount = 50
+    # print "Benchmarking image processing for %d frames" % repCount
+    # callTime = timeit.timeit("depthProceesingPipeline()", setup="from __main__ import depthProceesingPipeline", number = repCount)
+    # print "getFrame() FPS: %.3f" % (repCount / callTime)
+    # capture.release()
+    # return
