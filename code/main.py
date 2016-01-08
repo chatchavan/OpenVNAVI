@@ -281,57 +281,35 @@ def rendererProcess(webQueue, ipcQueue):
     IC = []
     freq = 490
 
+    IC.append(PWM(0x40+4))
+    IC.append(PWM(0x40+0))
+    IC.append(PWM(0x40+2))
+    IC.append(PWM(0x40+3))
+    IC.append(PWM(0x40+1))
+    IC.append(PWM(0x40+5))
+    IC.append(PWM(0x40+7))
+    IC.append(PWM(0x40+6))
 
-    # IC.append(PWM(0x40+4))
-    # IC.append(PWM(0x40+0))
-    # IC.append(PWM(0x40+2))
-    # IC.append(PWM(0x40+3))
-    # IC.append(PWM(0x40+1))
-    # IC.append(PWM(0x40+5))
-    # IC.append(PWM(0x40+7))
-    # IC.append(PWM(0x40+6))
+    for i in range(0,8):
+        IC.append(PWM(0x40+i))
+        IC[i].setPWMFreq(freq)
 
-    # for i in range(0,8):
-    #     IC.append(PWM(0x40+i))
-    #     IC[i].setPWMFreq(freq)
+    IC[0] = PWM(0x44)
+    IC[7] = PWM(0x46)
+    IC[4] = PWM(0x40)
+    IC[6] = PWM(0x47)
 
-    # IC[0] = PWM(0x44)
-    # IC[7] = PWM(0x46)
-    # IC[4] = PWM(0x40)
-    # IC[6] = PWM(0x47)
-
-    
-
-    # camera benchmarking
-    # getFrame()
-    # repCount = 50
-    # print "Benchmarking camera for %d frames" % repCount
-    # callTime = timeit.timeit("getFrame()", setup="from __main__ import getFrame", number = repCount)
-    # print "getFrame() FPS: %.3f" % (repCount / callTime)
-    # capture.release()
-    # return
-
-    # image processing benchmarking
-    # getFrame()
-    # repCount = 50
-    # print "Benchmarking image processing for %d frames" % repCount
-    # callTime = timeit.timeit("depthProceesingPipeline()", setup="from __main__ import depthProceesingPipeline", number = repCount)
-    # print "getFrame() FPS: %.3f" % (repCount / callTime)
-    # capture.release()
-    # return
-
-    
 
     # GPIO initialization.
-    # GPIO.setmode(GPIO.BCM)
-    # GPIO.setup(18, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-    # sw1 = GPIO.input(18) # Input NO switch.
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setup(18, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+    sw1 = GPIO.input(18) # Input NO switch.
 
     # Waits for sw1 to be pressed.
-    # print "System ready, press switch to continue..."
-    # beep(1, 0.2)
-    # GPIO.wait_for_edge(18, GPIO.RISING)
-    # fadeIn()
+    print "[Motor] System ready, press switch to continue..."
+    beep(1, 0.2)
+    GPIO.wait_for_edge(18, GPIO.RISING)
+    fadeIn()
     isMotorOn = True
 
     global sourceMode
@@ -344,9 +322,9 @@ def rendererProcess(webQueue, ipcQueue):
     while True:
 
         # check hardware switch
-        # gpioValue = GPIO.input(18)
-        # if ((gpioValue == True) and (isMotorOn == True)):
-        #     pause()
+        gpioValue = GPIO.input(18)
+        if ((gpioValue == True) and (isMotorOn == True)):
+            pause()
 
         # process web server message
         if not webQueue.empty():
@@ -358,7 +336,7 @@ def rendererProcess(webQueue, ipcQueue):
             if "mode" in requestJson:
                 nextMode = requestJson["mode"]
                 if nextMode is not sourceMode:
-                    print "Switching to mode %s" % nextMode
+                    print "[Motor] Switching to mode %s" % nextMode
                     sourceMode = nextMode
 
 
@@ -379,7 +357,7 @@ def rendererProcess(webQueue, ipcQueue):
 
         # set PWM
         assert PWM16 is not None
-        # setVibrationFromPWM(PWM16)
+        setVibrationFromPWM(PWM16)
 
         # save a copy of PWM to share with the web server
         shared_PWM[:] = PWM16[:]
@@ -389,11 +367,11 @@ def rendererProcess(webQueue, ipcQueue):
             break
 
 
-    print "[Renderer] shutdown requested"
-    # GPIO.cleanup()
-    # for i in range(0, 8):
-    #     IC[i].setAllPWM(0, 0)
-    print "[Renderer] successfully shutdown"
+    print "[Motor] shutdown requested"
+    GPIO.cleanup()
+    for i in range(0, 8):
+        IC[i].setAllPWM(0, 0)
+    print "[Motor] successfully shutdown"
 
 
 # ============================================================================
