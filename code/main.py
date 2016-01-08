@@ -468,7 +468,7 @@ def generateDepthImage():
                b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n\r\n')
 
         # sleep to work on different thing
-        gevent.sleep(0)
+        gevent.sleep(0.05)
 
 def generateDepth16Image():
     while True:
@@ -483,7 +483,7 @@ def generateDepth16Image():
                b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n\r\n')
 
         # sleep to work on different thing
-        gevent.sleep(0)
+        gevent.sleep(0.1)
 
 
 @webServer.route('/feed_depth')
