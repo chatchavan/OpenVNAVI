@@ -310,6 +310,8 @@ def rendererProcess(webQueue, ipcQueue):
     while not capture.isOpened():
         print "Couldn't open sensor. Is it connected?"
         time.sleep(100)
+        capture = cv2.VideoCapture(sensor)
+        capture.open(sensor)
     print "Sensor opened successfully"
 
     # camera benchmarking
