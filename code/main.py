@@ -187,6 +187,14 @@ def pause():
     fadeIn()
     isMotorOn = True
 
+
+def depthProceesingPipeline():
+    frame = getFrame()
+    snapShotForWeb(frame)
+    frame = processDepth(frame)
+    frame = scaleFrame(frame)
+    return frame
+
 def getFrame():
 
     """ Gets the frame from the sensor and stores it it.
@@ -310,6 +318,19 @@ def rendererProcess(webQueue, ipcQueue):
     # print "Benchmarking camera for %d frames" % repCount
     # callTime = timeit.timeit("getFrame()", setup="from __main__ import getFrame", number = repCount)
     # print "getFrame() FPS: %.3f" % (repCount / callTime)
+    # capture.release()
+    # return
+
+    # image processing benchmarking
+    # getFrame()
+    # repCount = 50
+    # print "Benchmarking image processing for %d frames" % repCount
+    # callTime = timeit.timeit("depthProceesingPipeline()", setup="from __main__ import depthProceesingPipeline", number = repCount)
+    # print "getFrame() FPS: %.3f" % (repCount / callTime)
+    # capture.release()
+    # return
+
+    
 
     # GPIO initialization.
     GPIO.setmode(GPIO.BCM)
@@ -363,10 +384,7 @@ def rendererProcess(webQueue, ipcQueue):
             PWM16 = PWMFromWeb
 
         elif sourceMode == "kinect":
-            frame = getFrame()
-            snapShotForWeb(frame)
-            frame = processDepth(frame)
-            frame = scaleFrame(frame)
+            frame = depthProceesingPipeline()
 
             # save a copy of PWM to share with the web server
             global shared_depthImg16
