@@ -198,25 +198,27 @@ def getFrame():
     return rawFrame
 
 
-def processDepth(inFrame):
-    # convert to appropriate data type for computation
-    frame = inFrame.astype(float)
-    
+def processDepth(inFrame):   
     # crop to match actuator aspect ratio
-    frame = frame[15:475, 12:618]  # TODO: this aspect ratio doesn't match the vest
+    frame = inFrame[15:475, 12:618]  # TODO: this aspect ratio doesn't match the vest
     
-    # scale to the distance that we are interested
+    # convert to appropriate data type for computation
+    frame = frame.astype(float)
+    
+    # the distance that we are interested
     minDist = 800 # in mm
     maxDist = 2000 # in mm
-    frame[frame > maxDist] = 0
-    frame[frame < minDist] = 0
-
-    # scale valid pixels
-    validIdx = (frame > 800) & (frame < 3500)
-    frame[validIdx] = (frame[validIdx] - 800) / (3500 - 800) * 255
     
+    # save invalid pixels
+    invalidIdx = (frame < minDist) | (frame > maxDist)
+    
+    # scale the value of each pixel
     # reverse the mapping (0: farthest - 255: nearest)
-    frame[validIdx] = 255 - frame[validIdx]
+    scaleFactor = 255.0 / (maxDist - minDist)
+    frame = 255 - ((frame - minDist) * scaleFactor)
+    
+    # set invalid pixels to zero
+    frame[invalidIdx] = 0
     
     return frame
 
