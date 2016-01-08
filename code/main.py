@@ -190,7 +190,6 @@ def pause():
 
 def depthProceesingPipeline():
     frame = shared_rawFrame[:]
-    snapShotForWeb(frame)
     frame = processDepth(frame)
     frame = scaleFrame(frame)
     return frame
@@ -257,11 +256,6 @@ def setVibrationFromPWM(PWM16):
     for row in range(0,8):
         for col in range (0,16):
             IC[row].setPWM(col,0,(PWM16[row,col]))
-
-def snapShotForWeb(frame):
-    global shared_depthImgFull
-    frameSmall = cv2.resize(frame, (STREAM_WIDTH, STREAM_HEIGHT))
-    shared_depthImgFull[:] = frameSmall
 
 
 # ============================================================================
@@ -477,7 +471,7 @@ def video16():
 
 def generateDepthImage():
     while True:
-        rawFrame = shared_depthImgFull
+        rawFrame = cv2.resize(shared_rawFrame, (STREAM_WIDTH, STREAM_HEIGHT))
         invalidIdx = (rawFrame == 0)
 
         # convert depth to RGB with proper masking of the invalid pixels
