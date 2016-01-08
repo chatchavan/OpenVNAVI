@@ -189,7 +189,7 @@ def pause():
 
 
 def depthProceesingPipeline():
-    frame = getFrame()
+    frame = shared_rawFrame[:]
     snapShotForWeb(frame)
     frame = processDepth(frame)
     frame = scaleFrame(frame)
@@ -297,23 +297,7 @@ def rendererProcess(webQueue, ipcQueue):
     # IC[4] = PWM(0x40)
     # IC[6] = PWM(0x47)
 
-    # Initialization of the sensor.
-    global sensor
-    sensor = CV_CAP_OPENNI_ASUS
-    global channel
-    channel = CV_CAP_OPENNI_DEPTH_MAP
-    global gain
-    gain = 5
-    global capture
-    print "About to initialize camera..."
-    capture = cv2.VideoCapture(sensor)
-    capture.open(sensor)
-    while not capture.isOpened():
-        print "Couldn't open sensor. Is it connected?"
-        time.sleep(100)
-        capture = cv2.VideoCapture(sensor)
-        capture.open(sensor)
-    print "Sensor opened successfully"
+    
 
     # camera benchmarking
     # getFrame()
@@ -410,6 +394,46 @@ def rendererProcess(webQueue, ipcQueue):
     #     IC[i].setAllPWM(0, 0)
     capture.release()   # cleanup camera
     print "[Renderer] successfully shutdown"
+
+
+# ============================================================================
+# Camera process
+# ============================================================================
+def cameraProcess(webQueue, ipcQueue):
+    global sensor, channel, capture, shared_rawFrame
+
+    # camera modes
+    sensor = CV_CAP_OPENNI_ASUS
+    channel = CV_CAP_OPENNI_DEPTH_MAP
+    
+    # inialize camera
+    print "About to initialize camera..."
+    capture = cv2.VideoCapture(sensor)
+    capture.open(sensor)
+    while not capture.isOpened():
+        print "Couldn't open sensor. Is it connected? (Trying again in 5 sec)"
+        time.sleep(5)
+        capture = cv2.VideoCapture(sensor)
+        capture.open(sensor)
+    print "Sensor opened successfully"
+
+    # get frame and copy to the shared buffer
+    shouldTerminate = False
+    while not shouldTerminate:
+        rawFrame = getFrame()
+        shared_rawFrame[:] = rawFrame[:]
+        
+        # process inter-process message
+        # TODO: change to shared ctype value
+        if not ipcQueue.empty():
+            ipcCommand = ipcQueue.get()
+            if ipcCommand == "terminate":
+                shouldTerminate = True
+
+
+    print "[Camera] shutdown requested"
+    capture.release()
+    print "[Camera] successfully shutdown"
 
 
 # ============================================================================
@@ -525,7 +549,7 @@ def webserverProcess(webQueue, ipcQueue):
 # Main function
 # ============================================================================
 def main():
-    global shared_depthImg16, shared_PWM, shared_depthImgFull
+    global shared_depthImg16, shared_PWM, shared_depthImgFull, shared_rawFrame
 
     # TODOs:
     print "WARNING: I2C error message is commented out. Chat should uncomment it once David fixes the IC line."
@@ -543,7 +567,10 @@ def main():
     shared_depthImgFull_base = mp.Array(ctypes.c_double, STREAM_HEIGHT * STREAM_WIDTH)
     shared_depthImgFull = np.ctypeslib.as_array(shared_depthImgFull_base.get_obj())
     shared_depthImgFull = shared_depthImgFull.reshape(STREAM_HEIGHT, STREAM_WIDTH)
-    
+
+    shared_rawFrame_base = mp.Array(ctypes.c_double, 480 * 640)
+    shared_rawFrame = np.ctypeslib.as_array(shared_rawFrame_base.get_obj())
+    shared_rawFrame = shared_rawFrame.reshape(480, 640)
 
     shared_PWM_base = mp.Array(ctypes.c_double, 8 * 16)
     shared_PWM = np.ctypeslib.as_array(shared_PWM_base.get_obj())
@@ -554,11 +581,15 @@ def main():
     p_webserver = mp.Process(target=webserverProcess, args=(webQueue, ipcQueue))
     p_webserver.start()
 
+    # camera process
+    p_camera = mp.Process(target=cameraProcess, args=(webQueue, ipcQueue))
+    p_camera.start()
+
     # jacket renderer process
     p_renderer = mp.Process(target=rendererProcess, args=(webQueue, ipcQueue))
     p_renderer.start()
 
-    workers = [p_webserver, p_renderer]
+    workers = [p_webserver, p_renderer, p_camera]
     try:
         for worker in workers:
             worker.join()
