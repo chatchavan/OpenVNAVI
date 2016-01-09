@@ -448,6 +448,10 @@ def video():
 def video16():
     return render_template('video16.html')
 
+@webServer.route('/videos')
+def videos():
+    return render_template('videos.html')
+
 
 def generateDepthImage():
     while True:
